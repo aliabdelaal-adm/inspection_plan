@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>خطة التفتيش الشهرية</title>
+  <style>
+    body { font-family:'Segoe UI',Arial,sans-serif; background:#f6f6f6; margin:0; padding:0;}
+    .container { max-width:950px; margin:40px auto; background:#fff; border-radius:10px; box-shadow:0 0 10px #bbb; padding:28px; direction:rtl;}
+    .header { background:#2336a0; color:#fff; font-size:1.6em; text-align:center; padding:16px 0; border-radius:8px; margin-bottom:24px;}
+    .section-title { background:#e2e6f6; font-size:1.17em; font-weight:bold; margin:22px 0 10px 0; padding:7px 0; border-radius:6px; text-align:right;}
+    .section-title.red { color:#c00; }
+    .between-tables-space {height:40px;}
+    .copyright { text-align:center; color:#2336a0; font-weight:bold; margin-top:30px; font-size:1.1em;}
+    .admin-section { background:#e2e6f6; border-radius:6px; padding:10px; margin-bottom:24px; }
+    .list-item {display:inline-block; background:#2336a0; color:#fff; margin:2px; padding:4px 12px; border-radius:4px;}
+    .del-btn {background:#c00; color:#fff; border:none; border-radius:50%; width:20px; height:20px; margin-right:7px; cursor:pointer;}
+    .del-btn:hover {background:#a00;}
+    .add-box {display:inline-block; margin-right:12px;}
+    table {width:100%; border-collapse:collapse; background:#fafafa;}
+    th,td {border:1px solid #bbb; padding:12px 6px; text-align:center; vertical-align:middle; font-size:1.09em;}
+    th {background:#2336a0; color:#fff;}
+    .goals-cell { text-align:right; background:#f3f7ff; color:#2336a0; font-weight:bold; font-size:1.09em;}
+    .goals-red { color:#c00; font-weight:bold; }
+    .goals-edit-label { font-size:1.12em; color:#2336a0; font-weight:bold; }
+    .goals-edit-text {width:98%; padding:7px; font-size:1.09em; border-radius:6px; border:1px solid #bbb; background:#f3f7ff; color:#2336a0;}
+    .print-btn, .save-btn { background:#2336a0; color:#fff; border:none; border-radius:4px; padding:8px 22px; font-size:1em; cursor:pointer; margin-bottom:12px; }
+    .print-btn:hover, .save-btn:hover { background:#2a43c7; }
+    .pw-popup { position: fixed; top: 0; right: 0; left:0; bottom:0; background: rgba(0,0,0,0.12); display: flex; align-items:center; justify-content:center; z-index:1000;}
+    .pw-box { background:#fff; padding:30px 24px; border-radius:12px; box-shadow:0 6px 30px #aaa; min-width:320px; text-align:center;}
+    .pw-box label { font-size:1.1em; color:#2336a0;}
+    .pw-box input[type="password"] { font-size:1.1em; padding:7px; margin:12px 0; border:1px solid #ccc; border-radius:6px; width:96%;}
+    .pw-box button { background:#2336a0; color:#fff; padding:9px 32px; font-size:1.1em; border-radius:8px; border:none; cursor:pointer; margin:0 4px;}
+    .pw-box button:hover { background:#2a43c7;}
+    .pw-error {color:#c00; margin-top:10px; font-weight:bold;}
+    .stats-table {margin:16px auto 24px auto; border:1px solid #2336a0; border-radius:8px; background:#f7f7ff;}
+    .stats-table th {background:#2336a0; color:#fff;}
+    .stats-table td {background:#fff;}
+    .stats-table tfoot td {background:#e2e6f6; font-weight:bold;}
+    .stats-inspector-col {min-width:160px; width:160px;}
+    .stats-total-cell { color:#c00; font-weight:bold;}
+    .goals-edit-box {margin: 14px 0 14px 0;}
+    @media print { .print-btn, .copyright, .admin-section, .save-btn, .pw-popup, .stats-table { display:none !important;} body { background:#fff; } .container { box-shadow:none; margin:0;} }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">خطة التفتيش الشهرية</div>
+    <div style="text-align:left; margin-bottom:12px;">
+      <label>نوع المستخدم: </label>
+      <select id="userType" onchange="onUserTypeChange()">
+        <option value="inspector">مفتش</option>
+        <option value="developer">المطور</option>
+      </select>
+    </div>
+    <div id="pwPopup" class="pw-popup" style="display:none;">
+      <div class="pw-box">
+        <label>أدخل كلمة المرور للمطور:</label><br>
+        <input id="pwInput" type="password" autocomplete="off" onkeypress="if(event.key==='Enter'){checkPassword();}">
+        <br>
+        <button onclick="checkPassword()">دخول</button>
+        <button onclick="cancelPassword()">إلغاء</button>
+        <div id="pwError" class="pw-error"></div>
+      </div>
+    </div>
+    <div id="adminSection" class="admin-section" style="display:none;">
+      <strong>إدارة المفتشين:</strong>
+      <div id="inspectors"></div>
+      <div class="add-box">
+        <input id="newInspector" type="text" placeholder="اسم مفتش جديد">
+        <button onclick="addInspector()">إضافة مفتش</button>
+      </div>
+      <hr>
+      <strong>إدارة المناطق:</strong>
+      <div id="areas"></div>
+      <div class="add-box">
+        <input id="newArea" type="text" placeholder="منطقة جديدة">
+        <button onclick="addArea()">إضافة منطقة</button>
+      </div>
+      <hr>
+      <strong>إدارة المحلات حسب المنطقة:</strong>
+      <div id="shops"></div>
+      <div class="add-box">
+        <select id="shopArea"></select>
+        <input id="newShop" type="text" placeholder="اسم محل جديد">
+        <button onclick="addShop()">إضافة محل</button>
+      </div>
+      <hr>
+      <strong>إدارة خطة التفتيش:</strong>
+      <div id="distribution"></div>
+      <button class="save-btn" onclick="savePlan()">حفظ الخطة على الجهاز</button>
+      <hr>
+      <strong class="goals-edit-label">أهداف التفتيش هذا الشهر:</strong>
+      <div class="goals-edit-box">
+        <textarea id="goalsEdit" class="goals-edit-text" rows="3"></textarea><br>
+        <button class="goals-save-btn" onclick="saveGoals()">حفظ الأهداف</button>
+      </div>
+    </div>
+    <button class="print-btn" onclick="window.print()">طباعة أو حفظ PDF</button>
+    <div class="section-title red">جدول التفتيش</div>
+    <div id="planTable"></div>
+    <div class="between-tables-space"></div>
+    <div class="section-title red">احصائيات التفتيش</div>
+    <div id="stats"></div>
+    <div class="copyright">
+      جميع الحقوق محفوظة &copy; المطور د. علي عبدالعال
+    </div>
+  </div>
+  <script>
+    // إعداد المتغيرات
+    const DEVELOPER_PASSWORD = "ali@1983!!!";
+    let isDevAuthorized = false;
+    let inspectors = [], areas = [], shopsByArea = {}, distribution = [], goals = "";
+
+    // جلب البيانات من GitHub (ملف plan-data.json)
+    async function loadData() {
+      try {
+        let res = await fetch('https://raw.githubusercontent.com/aliabdelaal-adm/inspection_plan/main/plan-data.json');
+        let data = await res.json();
+        inspectors = data.inspectors || [];
+        areas = data.areas || [];
+        shopsByArea = data.shopsByArea || {};
+        distribution = data.distribution || [];
+        goals = data.goals || "";
+        renderAll();
+      } catch (e) {
+        alert("تعذر تحميل البيانات من الخادم!");
+      }
+    }
+
+    // حفظ البيانات في ملف plan-data.json (للتنزيل فقط)
+    function savePlan() {
+      let plan = {
+        inspectors, areas, shopsByArea, distribution, goals
+      };
+      let blob = new Blob([JSON.stringify(plan, null, 2)], {type:"application/json"});
+      let url = URL.createObjectURL(blob);
+      let a = document.createElement("a");
+      a.href = url;
+      a.download = "plan-data.json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert("تم حفظ الخطة على الجهاز! قم برفع الملف على GitHub ليظهر لكل المفتشين.");
+    }
+
+    function onUserTypeChange() {
+      let userType = document.getElementById("userType").value;
+      if(userType==="developer" && !isDevAuthorized) {
+        document.getElementById("pwPopup").style.display = "flex";
+        document.getElementById("pwInput").value = "";
+        document.getElementById("pwInput").focus();
+        document.getElementById("pwError").textContent = "";
+        document.getElementById("adminSection").style.display = "none";
+      } else if(userType==="developer" && isDevAuthorized) {
+        document.getElementById("adminSection").style.display = "block";
+        document.getElementById("goalsEdit").value = goals;
+        renderAll();
+      } else {
+        document.getElementById("adminSection").style.display = "none";
+      }
+      renderPlanTable();
+      renderStats();
+    }
+    function checkPassword() {
+      let pw = document.getElementById("pwInput").value;
+      if(pw === DEVELOPER_PASSWORD) {
+        isDevAuthorized = true;
+        document.getElementById("pwPopup").style.display = "none";
+        document.getElementById("adminSection").style.display = "block";
+        document.getElementById("goalsEdit").value = goals;
+        renderAll();
+      } else {
+        document.getElementById("pwError").textContent = "كلمة المرور غير صحيحة!";
+        document.getElementById("pwInput").focus();
+      }
+    }
+    function cancelPassword() {
+      document.getElementById("pwPopup").style.display = "none";
+      document.getElementById("userType").value = "inspector";
+      document.getElementById("adminSection").style.display = "none";
+      isDevAuthorized = false;
+      renderPlanTable();
+      renderStats();
+    }
+
+    // إدارة المفتشين
+    function renderInspectors() {
+      let html = "";
+      inspectors.forEach((inspector, i) => {
+        html += `<span class="list-item">${inspector} <button class="del-btn" onclick="delInspector(${i})">×</button></span>`;
+      });
+      document.getElementById("inspectors").innerHTML = html;
+    }
+    function addInspector() {
+      let val = document.getElementById("newInspector").value.trim();
+      if(val && !inspectors.includes(val)) {
+        inspectors.push(val);
+        renderInspectors();
+        document.getElementById("newInspector").value = "";
+        renderDistribution();
+        renderPlanTable();
+        renderStats();
+      }
+    }
+    function delInspector(i) {
+      inspectors.splice(i,1);
+      renderInspectors();
+      renderDistribution();
+      renderPlanTable();
+      renderStats();
+    }
+
+    // إدارة المناطق
+    function renderAreas() {
+      let html = "";
+      areas.forEach((area, i) => {
+        html += `<span class="list-item">${area} <button class="del-btn" onclick="delArea(${i})">×</button></span>`;
+      });
+      document.getElementById("areas").innerHTML = html;
+      renderShopAreaSelect();
+    }
+    function addArea() {
+      let val = document.getElementById("newArea").value.trim();
+      if(val && !areas.includes(val)) {
+        areas.push(val); shopsByArea[val]=[];
+        renderAreas(); renderShops(); renderShopAreaSelect();
+      }
+    }
+    function delArea(i) {
+      let area = areas[i];
+      areas.splice(i,1);
+      delete shopsByArea[area];
+      renderAreas(); renderShops(); renderShopAreaSelect();
+    }
+    function renderShopAreaSelect() {
+      let sel = document.getElementById("shopArea");
+      sel.innerHTML = "";
+      areas.forEach(area => {
+        let opt = document.createElement("option");
+        opt.value = area; opt.textContent = area;
+        sel.appendChild(opt);
+      });
+    }
+
+    // إدارة المحلات
+    function renderShops() {
+      let html = "";
+      areas.forEach(area => {
+        html += `<strong>${area}:</strong> `;
+        (shopsByArea[area]||[]).forEach((shop,i) => {
+          html += `<span class="list-item">${shop} <button class="del-btn" onclick="delShop('${area}',${i})">×</button></span>`;
+        });
+        html += "<br>";
+      });
+      document.getElementById("shops").innerHTML = html;
+    }
+    function addShop() {
+      let area = document.getElementById("shopArea").value;
+      let shop = document.getElementById("newShop").value.trim();
+      if(area && shop && !shopsByArea[area].includes(shop)) {
+        shopsByArea[area].push(shop);
+        document.getElementById("newShop").value = "";
+        distribution.forEach((row,i)=>{
+          if(row.area === area) row.shops = [...shopsByArea[area]];
+        });
+        renderShops();
+        renderDistribution();
+        renderPlanTable();
+        renderStats();
+      }
+    }
+    function delShop(area,i) {
+      shopsByArea[area].splice(i,1); 
+      distribution.forEach((row)=>{
+        if(row.area === area) row.shops = row.shops.filter(shop => shopsByArea[area].includes(shop));
+      });
+      renderShops();
+      renderDistribution();
+      renderPlanTable();
+      renderStats();
+    }
+
+    // إدارة خطة التفتيش
+    function renderDistribution() {
+      let userType = document.getElementById("userType").value;
+      let html = `<table><tr>
+        <th>مفتش</th>
+        <th>اليوم</th>
+        <th>وقت المناوبة</th>
+        <th>المنطقة</th>
+        <th>المحلات</th>
+        <th>حذف</th>
+      </tr>`;
+      distribution.forEach((row,i) => {
+        html += `<tr>
+          <td>${
+            (userType === "developer" && isDevAuthorized)
+              ? `<select onchange="updateDist(${i},'inspector',this.value)">
+                  ${inspectors.map(ins => `<option${row.inspector===ins?" selected":""}>${ins}</option>`).join("")}
+                </select>`
+              : row.inspector
+          }</td>
+          <td><input type="date" value="${row.day}" onchange="updateDist(${i},'day',this.value)"></td>
+          <td>${
+            (userType === "developer" && isDevAuthorized)
+              ? `<select onchange="updateDist(${i},'shift',this.value)">
+                  <option${row.shift==="صباحية"?" selected":""}>صباحية</option>
+                  <option${row.shift==="مسائية"?" selected":""}>مسائية</option>
+                </select>`
+              : (row.shift || "")
+          }</td>
+          <td><select onchange="updateDist(${i},'area',this.value)">${areas.map(ar => `<option${row.area===ar?" selected":""}>${ar}</option>`).join("")}</select></td>
+          <td>${
+            (row.shops||[]).join("، ")
+          }</td>
+          <td><button class="del-btn" onclick="delDistRow(${i})">×</button></td>
+        </tr>`;
+      });
+      html += `</table><button onclick="addDistRow()">إضافة صف</button>`;
+      document.getElementById("distribution").innerHTML = html;
+    }
+    function addDistRow() {
+      distribution.push({inspector:inspectors[0]||"", day:"", shift:"صباحية", area:areas[0]||"", shops:[...(shopsByArea[areas[0]]||[])]});
+      renderDistribution();
+      renderPlanTable();
+      renderStats();
+    }
+    function updateDist(i, field, value) {
+      distribution[i][field]=value;
+      if(field==="area") {
+        distribution[i].shops = [...(shopsByArea[value]||[])];
+      }
+      renderDistribution();
+      renderPlanTable();
+      renderStats();
+    }
+    function delDistRow(i) {
+      distribution.splice(i,1);
+      renderDistribution();
+      renderPlanTable();
+      renderStats();
+    }
+
+    // إدارة الأهداف
+    function saveGoals() {
+      let newGoals = document.getElementById("goalsEdit").value.trim();
+      if (newGoals) {
+        goals = newGoals;
+        renderPlanTable();
+        renderStats();
+        alert("تم حفظ أهداف التفتيش بنجاح! لا تنس حفظ الخطة وتنزيل الملف.");
+      }
+    }
+
+    // جدول الاحصائيات
+    function renderStats() {
+      let inspectorShopCounts = {};
+      let morningCounts = {};
+      let eveningCounts = {};
+      let weekendCounts = {};
+
+      inspectors.forEach(inspector => {
+        inspectorShopCounts[inspector] = 0;
+        morningCounts[inspector] = 0;
+        eveningCounts[inspector] = 0;
+        weekendCounts[inspector] = 0;
+      });
+
+      distribution.forEach(row => {
+        if (!row.inspector || !inspectors.includes(row.inspector)) return;
+        let shopsCount = row.shops ? row.shops.length : 0;
+        let shift = row.shift || "";
+        let inspector = row.inspector;
+        let dayStr = row.day;
+        let isWeekend = false;
+        if (dayStr) {
+          let d = new Date(dayStr);
+          let dayOfWeek = d.getDay();
+          if (dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0) isWeekend = true;
+        }
+        inspectorShopCounts[inspector] += shopsCount;
+        if (shift === "صباحية") morningCounts[inspector] += shopsCount;
+        if (shift === "مسائية") eveningCounts[inspector] += shopsCount;
+        if (isWeekend) weekendCounts[inspector] += shopsCount;
+      });
+
+      let html = `<table class="stats-table">
+        <thead>
+          <tr>
+            <th class="stats-inspector-col">اسم المفتش</th>
+            <th>عدد التفتيشات (كل الشهر)</th>
+            <th>عدد التفتيشات الصباحية</th>
+            <th>عدد التفتيشات المسائية</th>
+            <th>عدد التفتيشات في العطلة (جمعة/سبت/أحد)</th>
+          </tr>
+        </thead>
+        <tbody>`;
+      inspectors.forEach(name => {
+        html += `<tr>
+          <td class="stats-inspector-col">${name}</td>
+          <td>${inspectorShopCounts[name]}</td>
+          <td>${morningCounts[name]}</td>
+          <td>${eveningCounts[name]}</td>
+          <td>${weekendCounts[name]}</td>
+        </tr>`;
+      });
+      html += `</tbody>
+        <tfoot>
+          <tr>
+            <td class="stats-total-cell">مجموع التفتيش</td>
+            <td class="stats-total-cell">${Object.values(inspectorShopCounts).reduce((a,b)=>a+b,0)}</td>
+            <td class="stats-total-cell">${Object.values(morningCounts).reduce((a,b)=>a+b,0)}</td>
+            <td class="stats-total-cell">${Object.values(eveningCounts).reduce((a,b)=>a+b,0)}</td>
+            <td class="stats-total-cell">${Object.values(weekendCounts).reduce((a,b)=>a+b,0)}</td>
+          </tr>
+        </tfoot>
+      </table>`;
+      document.getElementById("stats").innerHTML = html;
+    }
+
+    // جدول التفتيش
+    function renderPlanTable() {
+      let userType = document.getElementById("userType").value;
+      let html = `<table>
+        <thead>
+          <tr>
+            <th>اسم المفتش</th>
+            <th>اليوم</th>
+            <th>وقت المناوبة</th>
+            <th>المنطقة</th>
+            <th>المحلات</th>
+          </tr>
+        </thead>
+        <tbody>
+      `;
+      distribution.forEach((row, idx) => {
+        html += `<tr>
+          <td>${
+            (userType === "developer" && isDevAuthorized)
+              ? `<select onchange="updateDist(${idx},'inspector',this.value)">
+                  ${inspectors.map(ins => `<option${row.inspector===ins?" selected":""}>${ins}</option>`).join("")}
+                </select>`
+              : row.inspector
+          }</td>
+          <td>${row.day}</td>
+          <td>${row.shift || ""}</td>
+          <td>${row.area}</td>
+          <td>${(row.shops||[]).join("، ")}</td>
+        </tr>`;
+      });
+      html += `</tbody>
+        <tfoot>
+          <tr>
+            <td class="goals-cell" colspan="5">
+              <span class="goals-red">أهداف التفتيش هذا الشهر:</span><br>
+              <span>${goals.replace(/\n/g, "<br>")}</span>
+            </td>
+          </tr>
+        </tfoot>
+      </table>`;
+      document.getElementById("planTable").innerHTML = html;
+    }
+
+    // إعادة رسم كل العناصر
+    function renderAll() {
+      renderInspectors();
+      renderAreas();
+      renderShops();
+      renderShopAreaSelect();
+      renderDistribution();
+      renderPlanTable();
+      renderStats();
+      document.getElementById("goalsEdit").value = goals;
+    }
+
+    // تحميل البيانات عند بداية الصفحة
+    loadData();
+  </script>
+</body>
+</html>
