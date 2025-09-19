@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>لوحة إدارة خطة التفتيش الشهرية وتوزيع المحلات</title>
+  <style>
+    html, body { direction: rtl; }
+    body {font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6fb;}
+    h2 {text-align:center; background:#2336a0; color:#fff; padding:12px; border-radius:8px;}
+    .section {background:#e2e6f6; border-radius:6px; padding:10px; margin-bottom:18px;}
+    .list-item {display:inline-block; background:#2336a0; color:#fff; margin:2px; padding:4px 12px; border-radius:4px;}
+    .del-btn {background:#c00; color:#fff; border:none; border-radius:50%; width:20px; height:20px; margin-left:7px; cursor:pointer;}
+    .del-btn:hover {background:#a00;}
+    .add-box {display:inline-block; margin-left:12px;}
+    table {width:100%; border-collapse:collapse; margin-top:10px; direction: rtl;}
+    th,td {border:1px solid #bbb; padding:6px; text-align:center;}
+    th {background:#2336a0; color:#fff;}
+    .copyright {text-align:center; color:#2336a0; font-weight:bold; margin-top:30px;}
+    .save-btn {background:#2336a0; color:#fff; border:none; padding:8px 24px; border-radius:4px; font-size:1em; cursor:pointer;}
+    .save-btn:hover {background:#2a43c7;}
+    .upload-btn {background:#0fa25c; color:#fff; border:none; padding:8px 24px; border-radius:4px; font-size:1em; cursor:pointer; margin-right:8px;}
+    .upload-btn:hover {background:#0b7a43;}
+    .label {font-weight: bold; margin-bottom: 6px; display: inline-block;}
+    .shop-section strong {display:inline-block; margin-bottom:4px;}
+    input, select, button {font-family:inherit;}
+  </style>
+</head>
+<body>
+  <h2>لوحة إدارة خطة التفتيش الشهرية وتوزيع المحلات</h2>
+  <div class="section">
+    <span class="label">قائمة المفتشين:</span>
+    <div id="inspectors"></div>
+    <div class="add-box">
+      <input id="new-inspector" type="text" placeholder="مفتش جديد">
+      <button onclick="addInspector()">إضافة</button>
+    </div>
+  </div>
+  <div class="section">
+    <span class="label">قائمة المناطق:</span>
+    <div id="areas"></div>
+    <div class="add-box">
+      <input id="new-area" type="text" placeholder="منطقة جديدة">
+      <button onclick="addArea()">إضافة</button>
+    </div>
+  </div>
+  <div class="section shop-section">
+    <span class="label">إدارة المحلات حسب المنطقة:</span>
+    <div id="shops"></div>
+    <div class="add-box">
+      <select id="shop-area"></select>
+      <input id="new-shop" type="text" placeholder="اسم محل جديد">
+      <button onclick="addShop()">إضافة محل</button>
+    </div>
+  </div>
+  <div class="section">
+    <span class="label">توزيع المحلات على المفتشين والأيام:</span>
+    <div id="distribution"></div>
+    <button class="save-btn" onclick="saveData()">حفظ الخطة (تحميل ملف)</button>
+    <button class="upload-btn" onclick="saveAndUploadData()">حفظ ورفع تلقائيًا إلى GitHub</button>
+  </div>
+  <div class="copyright">جميع الحقوق محفوظة &copy; المطور د. علي عبدالعال</div>
+  <script>
+    // بيانات افتراضية (يمكنك تعديلها لاحقًا)
+    let inspectors = ["د. علي عبدالمالك", "د. محمد إسماعيل"];
+    let areas = ["وسط المدينة", "جنوب"];
+    let shopsByArea = {"وسط المدينة":["محل عام 1"], "جنوب":["محل جنوب 1"]};
+    let distribution = [];
+
+    // --- إدارة المفتشين ---
+    function renderInspectors() {
+      let html = "";
+      inspectors.forEach((inspector, i) => {
+        html += `<span class="list-item">${inspector} <button class="del-btn" title="حذف" onclick="delInspector(${i})">×</button></span>`;
+      });
+      document.getElementById("inspectors").innerHTML = html;
+    }
+    function addInspector() {
+      let val = document.getElementById("new-inspector").value.trim();
+      if(val && !inspectors.includes(val)) {
+        inspectors.push(val);
+        renderInspectors();
+        document.getElementById("new-inspector").value = "";
+        renderDistribution();
+      }
+    }
+    function delInspector(i) {
+      inspectors.splice(i,1);
+      renderInspectors();
+      renderDistribution();
+    }
+
+    // --- إدارة المناطق ---
+    function renderAreas() {
+      let html = "";
+      areas.forEach((area, i) => {
+        html += `<span class="list-item">${area} <button class="del-btn" title="حذف" onclick="delArea(${i})">×</button></span>`;
+      });
+      document.getElementById("areas").innerHTML = html;
+      renderShopAreaSelect();
+    }
+    function addArea() {
+      let val = document.getElementById("new-area").value.trim();
+      if(val && !areas.includes(val)) {
+        areas.push(val); shopsByArea[val]=[];
+        renderAreas(); renderShops();
+        document.getElementById("new-area").value = "";
+      }
+    }
+    function delArea(i) {
+      let area = areas[i];
+      areas.splice(i,1);
+      delete shopsByArea[area];
+      renderAreas(); renderShops();
+      renderDistribution();
+    }
+
+    // --- إدارة المحلات ---
+    function renderShopAreaSelect() {
+      let sel = document.getElementById("shop-area");
+      sel.innerHTML = "";
+      areas.forEach(area => {
+        let opt = document.createElement("option");
+        opt.value = area; opt.textContent = area;
+        sel.appendChild(opt);
+      });
+    }
+    function renderShops() {
+      let html = "";
+      areas.forEach(area => {
+        html += `<strong>${area}:</strong> `;
+        (shopsByArea[area]||[]).forEach((shop,i) => {
+          html += `<span class="list-item">${shop} <button class="del-btn" title="حذف" onclick="delShop('${area}',${i})">×</button></span>`;
+        });
+        html += "<br>";
+      });
+      document.getElementById("shops").innerHTML = html;
+    }
+    function addShop() {
+      let area = document.getElementById("shop-area").value;
+      let shop = document.getElementById("new-shop").value.trim();
+      if(area && shop && !shopsByArea[area].includes(shop)) {
+        shopsByArea[area].push(shop);
+        renderShops();
+        document.getElementById("new-shop").value = "";
+        renderDistribution();
+      }
+    }
+    function delShop(area,i) {
+      shopsByArea[area].splice(i,1); renderShops(); renderDistribution();
+    }
+
+    // --- توزيع المحلات ---
+    function renderDistribution() {
+      let html = `<table><tr><th>مفتش</th><th>اليوم</th><th>المنطقة</th><th>المحل</th><th>حذف</th></tr>`;
+      distribution.forEach((row,i) => {
+        html += `<tr>
+          <td><select onchange="updateDist(${i},'inspector',this.value)">${inspectors.map(ins => `<option${row.inspector===ins?" selected":""}>${ins}</option>`)}</select></td>
+          <td><input type="date" value="${row.day}" onchange="updateDist(${i},'day',this.value)"></td>
+          <td><select onchange="updateDist(${i},'area',this.value)">${areas.map(ar => `<option${row.area===ar?" selected":""}>${ar}</option>`)}</select></td>
+          <td><select onchange="updateDist(${i},'shop',this.value)">${(shopsByArea[row.area]||[]).map(shop => `<option${row.shop===shop?" selected":""}>${shop}</option>`)}</select></td>
+          <td><button class="del-btn" title="حذف الصف" onclick="delDistRow(${i})">×</button></td>
+        </tr>`;
+      });
+      html += `</table><button style="margin-top:8px;" onclick="addDistRow()">إضافة صف</button>`;
+      document.getElementById("distribution").innerHTML = html;
+    }
+    function addDistRow() {
+      distribution.push({inspector:inspectors[0]||"", day:"", area:areas[0]||"", shop:(shopsByArea[areas[0]]||[])[0]||""});
+      renderDistribution();
+    }
+    function updateDist(i, field, value) {
+      distribution[i][field]=value;
+      if(field==="area") distribution[i].shop = (shopsByArea[value]||[])[0]||"";
+      renderDistribution();
+    }
+    function delDistRow(i) {
+      distribution.splice(i,1);
+      renderDistribution();
+    }
+
+    // --- حفظ البيانات محلياً ---
+    function saveData() {
+      let plan = {
+        inspectors: inspectors,
+        areas: areas,
+        shopsByArea: shopsByArea,
+        distribution: distribution
+      };
+      let blob = new Blob([JSON.stringify(plan, null, 2)], {type:"application/json"});
+      let url = URL.createObjectURL(blob);
+      let a = document.createElement("a");
+      a.href = url;
+      a.download = "plan-data.json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert("تم حفظ البيانات! عند رفع الملف على السيرفر أو مشاركة مكان التخزين سيقرأه نظام المفتشين تلقائياً.");
+    }
+
+    // --- رفع البيانات تلقائيًا إلى GitHub ---
+    async function saveAndUploadData() {
+      let plan = {
+        inspectors: inspectors,
+        areas: areas,
+        shopsByArea: shopsByArea,
+        distribution: distribution
+      };
+      await uploadPlanDataToGitHub(plan);
+    }
+
+    async function uploadPlanDataToGitHub(planData) {
+      const owner = "aliabdelaal-adm";
+      const repo = "inspection_plan";
+      const path = "plan-data.json";
+      const branch = "main";
+      const token = "YOUR_PERSONAL_TOKEN"; // ⚠️ استبدلها بالتوكن السري الخاص بك
+
+      let sha = "";
+      let urlGet = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+      let resGet = await fetch(urlGet, {
+        headers: { Authorization: `token ${token}` }
+      });
+      if (resGet.status === 200) {
+        let data = await resGet.json();
+        sha = data.sha;
+      }
+      let urlPut = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+      let resPut = await fetch(urlPut, {
+        method: "PUT",
+        headers: {
+          "Authorization": `token ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: "تحديث plan-data.json تلقائيًا من لوحة الإدارة",
+          content: btoa(unescape(encodeURIComponent(JSON.stringify(planData, null, 2)))),
+          branch: branch,
+          sha: sha || undefined
+        })
+      });
+
+      if (resPut.status === 201 || resPut.status === 200) {
+        alert("تم رفع البيانات تلقائيًا إلى GitHub بنجاح!");
+      } else {
+        let error = await resPut.json();
+        alert("حدث خطأ أثناء الرفع: " + (error.message || resPut.status));
+      }
+    }
+
+    // --- أول تحميل للتصميم ---
+    renderInspectors();
+    renderAreas();
+    renderShopAreaSelect();
+    renderShops();
+    renderDistribution();
+  </script>
+</body>
+</html>
