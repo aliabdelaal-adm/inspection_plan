@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم</title>
+    <script>
+        let shops = [];
+        let inspectors = [];
+
+        function addShop() {
+            const shopName = document.getElementById('shopName').value;
+            if (shopName) {
+                shops.push(shopName);
+                document.getElementById('shopName').value = '';
+                displayShops();
+            }
+        }
+
+        function deleteShop(index) {
+            shops.splice(index, 1);
+            displayShops();
+        }
+
+        function addInspector() {
+            const inspectorName = document.getElementById('inspectorName').value;
+            if (inspectorName) {
+                inspectors.push(inspectorName);
+                document.getElementById('inspectorName').value = '';
+                displayInspectors();
+            }
+        }
+
+        function deleteInspector(index) {
+            inspectors.splice(index, 1);
+            displayInspectors();
+        }
+
+        function displayShops() {
+            const shopList = document.getElementById('shopList');
+            shopList.innerHTML = '';
+            shops.forEach((shop, index) => {
+                shopList.innerHTML += `<li>${shop} <button onclick=\"deleteShop(${index})\">حذف</button></li>`;
+            });
+        }
+
+        function displayInspectors() {
+            const inspectorList = document.getElementById('inspectorList');
+            inspectorList.innerHTML = '';
+            inspectors.forEach((inspector, index) => {
+                inspectorList.innerHTML += `<li>${inspector} <button onclick=\"deleteInspector(${index})\">حذف</button></li>`;
+            });
+        }
+
+        function exportData() {
+            const data = { shops, inspectors };
+            const json = JSON.stringify(data);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'plan-data.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</head>
+<body>
+    <h1>لوحة التحكم</h1>
+    <h2>إضافة محل</h2>
+    <input type="text" id="shopName" placeholder="اسم المحل">
+    <button onclick="addShop()">إضافة</button>
+    <ul id="shopList"></ul>
+
+    <h2>إضافة مفتش</h2>
+    <input type="text" id="inspectorName" placeholder="اسم المفتش">
+    <button onclick="addInspector()">إضافة</button>
+    <ul id="inspectorList"></ul>
+
+    <button onclick="exportData()">تصدير البيانات</button>
+</body>
+</html>
