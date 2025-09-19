@@ -1,19 +1,29 @@
 @echo off
+REM Smart auto-push script for plan-data.json
+REM Monitors for changes and pushes only when actual updates occur
 
-REM Batch script for auto-pushing plan-data.json
-
-setlocal
-
-set REPO=aliabdelaal-adm/inspection_plan
 set FILE=plan-data.json
-set GIT_DIR=%CD%\%REPO%
+set SLEEP=30
 
-REM Change to the repository directory
-cd %GIT_DIR%
+REM Store the initial hash
+for /f %%i in ('certutil -hashfile "%FILE%" MD5 ^| find /i /v "md5"') do set OLDHASH=%%i
 
-REM Add, commit, and push the changes
-git add %FILE%
-git commit -m "Auto-push plan-data.json"
-git push origin main
+:loop
+REM Wait for some time before checking again
+timeout /t %SLEEP% /nobreak >nul
 
-endlocal
+REM Calculate current hash
+for /f %%i in ('certutil -hashfile "%FILE%" MD5 ^| find /i /v "md5"') do set NEWHASH=%%i
+
+REM If hash changed, push to GitHub
+if not "%OLDHASH%"=="%NEWHASH%" (
+    echo Detected change in %FILE%. Pushing to GitHub...
+    git add "%FILE%"
+    git commit -m "Auto-update plan-data.json"
+    git push
+    set OLDHASH=%NEWHASH%
+) else (
+    echo No change in %FILE%. Monitoring...
+)
+
+goto loop
