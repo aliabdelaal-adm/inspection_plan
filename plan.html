@@ -85,9 +85,17 @@
         <button onclick="addShop()">إضافة محل</button>
       </div>
       <hr>
+      <strong>إعدادات GitHub:</strong>
+      <div class="add-box">
+        <label>GitHub Token: </label>
+        <input id="githubToken" type="text" placeholder="أدخل GitHub Token هنا" style="width:300px; margin-left:10px;">
+        <button onclick="saveGithubToken()">حفظ التوكن</button>
+      </div>
+      <hr>
       <strong>إدارة خطة التفتيش:</strong>
       <div id="distribution"></div>
       <button class="save-btn" onclick="savePlan()">حفظ الخطة على الجهاز</button>
+      <button class="save-btn" onclick="saveAndUploadToGithub()" style="background:#28a745; margin-right:10px;">حفظ ورفع تلقائياً إلى GitHub</button>
       <hr>
       <strong class="goals-edit-label">أهداف التفتيش هذا الشهر:</strong>
       <div class="goals-edit-box">
@@ -149,7 +157,112 @@
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      alert("تم حفظ الخطة على الجهاز! سيتم رفع الملف تلقائياً إذا كان السكربت يعمل.");
+    }
+
+    // حفظ GitHub Token في LocalStorage
+    function saveGithubToken() {
+      const token = document.getElementById("githubToken").value.trim();
+      if (token) {
+        localStorage.setItem("githubToken", token);
+      }
+    }
+
+    // تحميل GitHub Token من LocalStorage
+    function loadGithubToken() {
+      const savedToken = localStorage.getItem("githubToken");
+      if (savedToken) {
+        document.getElementById("githubToken").value = savedToken;
+      }
+    }
+
+    // رفع الملف إلى GitHub باستخدام API
+    async function uploadToGithub(fileContent) {
+      const token = localStorage.getItem("githubToken");
+      if (!token) {
+        alert("يرجى إدخال GitHub Token أولاً");
+        return false;
+      }
+
+      try {
+        // الحصول على SHA الحالي للملف
+        let currentSha = null;
+        try {
+          const getResponse = await fetch('https://api.github.com/repos/aliabdelaal-adm/inspection_plan/contents/plan-data.json', {
+            headers: {
+              'Authorization': `token ${token}`,
+              'Accept': 'application/vnd.github.v3+json'
+            }
+          });
+          if (getResponse.ok) {
+            const fileData = await getResponse.json();
+            currentSha = fileData.sha;
+          }
+        } catch (e) {
+          // الملف غير موجود، سيتم إنشاؤه
+        }
+
+        // رفع الملف
+        const content = btoa(unescape(encodeURIComponent(fileContent)));
+        const uploadData = {
+          message: "Auto-update plan-data.json",
+          content: content,
+          branch: "main"
+        };
+
+        if (currentSha) {
+          uploadData.sha = currentSha;
+        }
+
+        const uploadResponse = await fetch('https://api.github.com/repos/aliabdelaal-adm/inspection_plan/contents/plan-data.json', {
+          method: 'PUT',
+          headers: {
+            'Authorization': `token ${token}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(uploadData)
+        });
+
+        if (uploadResponse.ok) {
+          return true;
+        } else {
+          const errorData = await uploadResponse.json();
+          alert("خطأ في رفع الملف: " + (errorData.message || "خطأ غير معروف"));
+          return false;
+        }
+      } catch (error) {
+        alert("خطأ في الاتصال بـ GitHub: " + error.message);
+        return false;
+      }
+    }
+
+    // حفظ ورفع إلى GitHub
+    async function saveAndUploadToGithub() {
+      // حفظ التوكن أولاً
+      saveGithubToken();
+      
+      let plan = {
+        inspectors, areas, shopsByArea, distribution, goals
+      };
+      
+      const fileContent = JSON.stringify(plan, null, 2);
+      
+      // حفظ محلياً
+      let blob = new Blob([fileContent], {type:"application/json"});
+      let url = URL.createObjectURL(blob);
+      let a = document.createElement("a");
+      a.href = url;
+      a.download = "plan-data.json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      // رفع إلى GitHub
+      const success = await uploadToGithub(fileContent);
+      if (!success) {
+        // في حالة فشل الرفع، لا نفعل شيء (الرسالة تظهر من uploadToGithub)
+      }
     }
 
     function onUserTypeChange() {
@@ -163,6 +276,7 @@
       } else if(userType==="developer" && isDevAuthorized) {
         document.getElementById("adminSection").style.display = "block";
         document.getElementById("goalsEdit").value = goals;
+        loadGithubToken(); // تحميل التوكن المحفوظ
         renderAll();
       } else {
         document.getElementById("adminSection").style.display = "none";
@@ -177,6 +291,7 @@
         document.getElementById("pwPopup").style.display = "none";
         document.getElementById("adminSection").style.display = "block";
         document.getElementById("goalsEdit").value = goals;
+        loadGithubToken(); // تحميل التوكن المحفوظ
         renderAll();
       } else {
         document.getElementById("pwError").textContent = "كلمة المرور غير صحيحة!";
@@ -295,16 +410,16 @@
       </tr>`;
       distribution.forEach((row,i) => {
         html += `<tr>
-          <td>$$
-            {(userType === "developer" && isDevAuthorized)
+          <td>${
+            (userType === "developer" && isDevAuthorized)
               ? `<select onchange="updateDist(${i},'inspector',this.value)">
                   ${inspectors.map(ins => `<option${row.inspector===ins?" selected":""}>${ins}</option>`).join("")}
                 </select>`
               : row.inspector
           }</td>
           <td><input type="date" value="${row.day}" onchange="updateDist(${i},'day',this.value)"></td>
-          <td>$$
-            {(userType === "developer" && isDevAuthorized)
+          <td>${
+            (userType === "developer" && isDevAuthorized)
               ? `<select onchange="updateDist(${i},'shift',this.value)">
                   <option${row.shift==="صباحية"?" selected":""}>صباحية</option>
                   <option${row.shift==="مسائية"?" selected":""}>مسائية</option>
@@ -346,7 +461,6 @@
         goals = newGoals;
         renderPlanTable();
         renderStats();
-        alert("تم حفظ أهداف التفتيش بنجاح! لا تنس حفظ الخطة وتنزيل الملف.");
       }
     }
     function renderStats() {
@@ -429,8 +543,8 @@
       `;
       distribution.forEach((row, idx) => {
         html += `<tr>
-          <td>$$
-            {(userType === "developer" && isDevAuthorized)
+          <td>${
+            (userType === "developer" && isDevAuthorized)
               ? `<select onchange="updateDist(${idx},'inspector',this.value)">
                   ${inspectors.map(ins => `<option${row.inspector===ins?" selected":""}>${ins}</option>`).join("")}
                 </select>`
