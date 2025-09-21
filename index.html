@@ -34,11 +34,12 @@
     .pw-popup { position: fixed; top: 0; right: 0; left:0; bottom:0; background: rgba(0,0,0,0.12); display: flex; align-items:center; justify-content:center; z-index:1000;}
     .pw-box { background:#fff; padding:30px 24px; border-radius:12px; box-shadow:0 6px 30px #aaa; min-width:320px; text-align:center;}
     .pw-box label { font-size:1.1em; color:#2336a0;}
-    .pw-box input[type="password"] { font-size:1.1em; padding:7px; margin:12px 0; border:1px solid #ccc; border-radius:6px; width:96%;}
+    .pw-box input[type="password"], .pw-box input[type="text"] { font-size:1.1em; padding:7px; margin:12px 0; border:1px solid #ccc; border-radius:6px; width:96%;}
     .pw-box button { background:#2336a0; color:#fff; padding:9px 32px; font-size:1.1em; border-radius:8px; border:none; cursor:pointer; margin:0 4px;}
     .pw-box button:hover { background:#2a43c7;}
     .pw-error {color:#c00; margin-top:10px; font-weight:bold;}
     .goals-edit-box {margin: 14px 0 14px 0;}
+    .update-banner {background: #c00; color: #fff; font-weight: bold; text-align: center; padding: 12px 0; border-radius: 7px; margin-bottom: 18px; font-size: 1.13em;}
     /* Popup shops */
     .shops-popup-bg {position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.15);z-index:2000;display:flex;align-items:center;justify-content:center;}
     .shops-popup-box {background:#fff;padding:24px 18px;border-radius:10px;box-shadow:0 5px 32px #aaa;min-width:320px;max-width:420px;text-align:right;}
@@ -53,12 +54,15 @@
     .shop-list-popup-close:hover {background:#a00;}
     .shops-cell-btn {background:#e2e6f6; color:#2336a0; border:none; border-radius:4px; padding:6px 17px; font-size:1em; cursor:pointer;}
     .shops-cell-btn:hover {background:#bed3fa;}
-    @media print { .print-btn, .copyright, .admin-section, .save-btn, .pw-popup, .shops-popup-bg, .stats-table, .shop-list-popup-bg { display:none !important;} body { background:#fff; } .container { box-shadow:none; margin:0;} }
+    @media print { .print-btn, .copyright, .admin-section, .save-btn, .pw-popup, .shops-popup-bg, .stats-table, .shop-list-popup-bg, .update-banner { display:none !important;} body { background:#fff; } .container{ box-shadow:none;} }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">خطة التفتيش الشهرية</div>
+    <div id="updateBanner" class="update-banner" style="display:none;">
+      يوجد تحديث جديد في خطة التفتيش &mdash; <button onclick="reloadPlan(true)" style="font-weight:bold; background:#fff; color:#c00; border-radius:5px; border:none; padding:3px 12px; margin-right:10px; cursor:pointer;">عرض الخطة الجديدة</button>
+    </div>
     <div style="text-align:left; margin-bottom:12px;">
       <label>نوع المستخدم: </label>
       <select id="userType" onchange="onUserTypeChange()">
@@ -101,7 +105,9 @@
       <hr>
       <strong>إدارة خطة التفتيش:</strong>
       <div id="distribution"></div>
-      <button class="save-btn" onclick="savePlan()">حفظ الخطة على الجهاز</button>
+      <button class="save-btn" onclick="savePlan()">حفظ الخطة على GitHub</button>
+      <button class="save-btn" onclick="savePlanLocally()">حفظ الخطة على الجهاز</button>
+      <button class="save-btn" style="background:#2a43c7" onclick="reloadPlan(true)">تحديث الخطة من GitHub</button>
       <hr>
       <strong class="goals-edit-label">أهداف التفتيش هذا الشهر:</strong>
       <div class="goals-edit-box">
@@ -124,43 +130,104 @@
     </div>
   </div>
   <script>
-    // باقي الكود كما هو، فقط دالة renderStats بها التعديل المطلوب
+    // إعدادات المستودع
+    const PLAN_REPO = "aliabdelaal-adm/Monthly_inspection_plan";
+    const PLAN_FILE = "plan-data.json";
+    const PLAN_BRANCH = "main";
     const DEVELOPER_PASSWORD = "ali@1983!!!";
+    const TOKEN_KEY = "devGitHubToken";
     let isDevAuthorized = false;
-    const LOCAL_KEY = "inspectionPlanData";
+    let lastPlanSha = "";
+    let planData = null;
+    let prevPlanSha = localStorage.getItem("planPlanSha") || "";
 
-    function loadData() {
-      let saved = localStorage.getItem(LOCAL_KEY);
-      if (saved) {
-        try {
-          let data = JSON.parse(saved);
-          inspectors = data.inspectors || [];
-          areas = data.areas || [];
-          shopsByArea = data.shopsByArea || {};
-          distribution = data.distribution || [];
-          goals = data.goals || "";
-        } catch(e) {}
-      } else {
-        inspectors = ["د. علي عبدالمالك", "د. محمد إسماعيل"];
-        areas = ["وسط المدينة", "جنوب"];
-        shopsByArea = {"وسط المدينة":["محل عام 1","محل عام 2","محل عام 3"], "جنوب":["محل جنوب 1","محل جنوب 2"]};
-        distribution = [
-          {inspector:"د. علي عبدالمالك", day:"2025-09-02", shift:"صباحية", area:"وسط المدينة", shops:["محل عام 1"]},
-          {inspector:"د. محمد إسماعيل", day:"2025-09-03", shift:"مسائية", area:"جنوب", shops:["محل جنوب 1","محل جنوب 2"]},
-          {inspector:"د. محمد إسماعيل", day:"2025-09-04", shift:"صباحية", area:"وسط المدينة", shops:["محل عام 2"]}
-        ];
-        goals="ضمان سلامة المنتجات / الالتزام بالاشتراطات الصحية";
+    // جلب الخطة من GitHub بدون كاش
+    async function fetchPlanFromGitHub(showBannerIfNew=true) {
+      let url = `https://raw.githubusercontent.com/${PLAN_REPO.split("/")[0]}/${PLAN_REPO.split("/")[1]}/${PLAN_BRANCH}/${PLAN_FILE}?t=${Date.now()}`;
+      let apiUrl = `https://api.github.com/repos/${PLAN_REPO}/contents/${PLAN_FILE}?ref=${PLAN_BRANCH}&t=${Date.now()}`;
+      // 1- جلب sha أولاً (للتحقق من التحديثات)
+      let shaResp = await fetch(apiUrl, {cache:"reload"});
+      if (!shaResp.ok) throw new Error("تعذر جلب بيانات الملف من GitHub");
+      let shaData = await shaResp.json();
+      let remoteSha = shaData.sha;
+      if (lastPlanSha && lastPlanSha !== remoteSha && showBannerIfNew) {
+        document.getElementById("updateBanner").style.display = "block";
+        return null;
+      }
+      // 2- جلب البيانات الفعلية
+      let resp = await fetch(url, {cache:"reload"});
+      if (!resp.ok) throw new Error("تعذر جلب خطة التفتيش من GitHub");
+      let data = await resp.json();
+      lastPlanSha = remoteSha;
+      localStorage.setItem("planPlanSha", remoteSha);
+      document.getElementById("updateBanner").style.display = "none";
+      return data;
+    }
+
+    // إعادة تحميل الخطة (مع إجبار التحديث)
+    async function reloadPlan(force=false) {
+      document.getElementById("updateBanner").style.display = "none";
+      let data = await fetchPlanFromGitHub(false);
+      if (data) {
+        planData = data;
+        renderAll();
+        alert("تم تحميل آخر نسخة من الخطة من GitHub.");
+      } else if(force) {
+        // في حال لم تتغير sha عد تحميل البيانات
+        let url = `https://raw.githubusercontent.com/${PLAN_REPO.split("/")[0]}/${PLAN_REPO.split("/")[1]}/${PLAN_BRANCH}/${PLAN_FILE}?t=${Date.now()}`;
+        let resp = await fetch(url, {cache:"reload"});
+        if (resp.ok) {
+          planData = await resp.json();
+          renderAll();
+          alert("تم تحميل آخر نسخة من الخطة من GitHub.");
+        }
       }
     }
-    function autoSave() {
-      let data = {
-        inspectors, areas, shopsByArea, distribution, goals
-      };
-      localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
-    }
-    let inspectors = [], areas = [], shopsByArea = {}, distribution = [], goals="";
-    loadData();
 
+    // المراقبة الدورية للتحديث
+    setInterval(async () => {
+      try {
+        let apiUrl = `https://api.github.com/repos/${PLAN_REPO}/contents/${PLAN_FILE}?ref=${PLAN_BRANCH}&t=${Date.now()}`;
+        let shaResp = await fetch(apiUrl, {cache:"reload"});
+        if (!shaResp.ok) return;
+        let shaData = await shaResp.json();
+        let remoteSha = shaData.sha;
+        if (lastPlanSha && remoteSha !== lastPlanSha) {
+          document.getElementById("updateBanner").style.display = "block";
+        }
+      } catch(e){}
+    }, 60000); // كل دقيقة
+
+    // تحميل الخطة عند بدء الصفحة
+    window.onload = async function() {
+      try {
+        planData = await fetchPlanFromGitHub();
+        if (!planData) {
+          // إذا كانت هناك نسخة محلية محفوظة (مطور فقط)
+          let backup = localStorage.getItem("planDataBackup");
+          if (backup) planData = JSON.parse(backup);
+        }
+        renderAll();
+      } catch(e){
+        alert("تعذر تحميل خطة التفتيش من GitHub.\n" + e.message);
+      }
+    };
+
+    // عرض كل أجزاء الصفحة
+    function renderAll() {
+      renderPlanTable();
+      renderStats();
+      if(isDevAuthorized) {
+        renderInspectors();
+        renderAreas();
+        renderShops();
+        renderShopAreaSelect();
+        renderDistribution();
+        document.getElementById("goalsEdit").value = planData.goals || "";
+      }
+    }
+
+    // واجهة المستخدم ـ مفتش/مطور
     function onUserTypeChange() {
       let userType = document.getElementById("userType").value;
       if(userType==="developer" && !isDevAuthorized) {
@@ -171,20 +238,11 @@
         document.getElementById("adminSection").style.display = "none";
       } else if(userType==="developer" && isDevAuthorized) {
         document.getElementById("adminSection").style.display = "block";
-        document.getElementById("goalsEdit").value = goals;
+        document.getElementById("goalsEdit").value = planData.goals || "";
       } else {
         document.getElementById("adminSection").style.display = "none";
       }
-      renderPlanTable();
-      renderStats();
-      if(userType==="developer" && isDevAuthorized) {
-        renderInspectors();
-        renderAreas();
-        renderShops();
-        renderShopAreaSelect();
-        renderDistribution();
-        document.getElementById("goalsEdit").value = goals;
-      }
+      renderAll();
     }
     function checkPassword() {
       let pw = document.getElementById("pwInput").value;
@@ -192,14 +250,10 @@
         isDevAuthorized = true;
         document.getElementById("pwPopup").style.display = "none";
         document.getElementById("adminSection").style.display = "block";
-        renderInspectors();
-        renderAreas();
-        renderShops();
-        renderShopAreaSelect();
-        renderDistribution();
-        renderPlanTable();
-        renderStats();
-        document.getElementById("goalsEdit").value = goals;
+        document.getElementById("goalsEdit").value = planData.goals || "";
+        renderAll();
+        // في أول دخول للمطور: يطلب التوكن إذا لم يكن مخزن
+        setTimeout(askTokenIfNeeded, 500);
       } else {
         document.getElementById("pwError").textContent = "كلمة المرور غير صحيحة!";
         document.getElementById("pwInput").focus();
@@ -210,40 +264,52 @@
       document.getElementById("userType").value = "inspector";
       document.getElementById("adminSection").style.display = "none";
       isDevAuthorized = false;
-      renderPlanTable();
-      renderStats();
+      renderAll();
     }
 
+    // طلب التوكن مرة واحدة فقط
+    function askTokenIfNeeded() {
+      if(!localStorage.getItem(TOKEN_KEY)) {
+        let t = prompt("أدخل GitHub Personal Access Token (مرة واحدة فقط):\n(يفضل أن يكون له صلاحية repo:public_repo)");
+        if(t) localStorage.setItem(TOKEN_KEY, t.trim());
+      }
+    }
+    function getTokenOrAsk() {
+      let t = localStorage.getItem(TOKEN_KEY);
+      if(!t) askTokenIfNeeded();
+      return localStorage.getItem(TOKEN_KEY);
+    }
+
+    // إدارة المفتشين
     function renderInspectors() {
       let html = "";
-      inspectors.forEach((inspector, i) => {
+      (planData.inspectors||[]).forEach((inspector, i) => {
         html += `<span class="list-item">${inspector} <button class="del-btn" onclick="delInspector(${i})">×</button></span>`;
       });
       document.getElementById("inspectors").innerHTML = html;
     }
     function addInspector() {
       let val = document.getElementById("newInspector").value.trim();
-      if(val && !inspectors.includes(val)) {
-        inspectors.push(val);
-        autoSave();
+      if(val && !planData.inspectors.includes(val)) {
+        planData.inspectors.push(val);
         renderInspectors();
-        document.getElementById("newInspector").value = "";
         renderDistribution();
         renderPlanTable();
         renderStats();
       }
     }
     function delInspector(i) {
-      inspectors.splice(i,1);
-      autoSave();
+      planData.inspectors.splice(i,1);
       renderInspectors();
       renderDistribution();
       renderPlanTable();
       renderStats();
     }
+
+    // إدارة المناطق
     function renderAreas() {
       let html = "";
-      areas.forEach((area, i) => {
+      (planData.areas||[]).forEach((area, i) => {
         html += `<span class="list-item">${area} <button class="del-btn" onclick="delArea(${i})">×</button></span>`;
       });
       document.getElementById("areas").innerHTML = html;
@@ -251,23 +317,23 @@
     }
     function addArea() {
       let val = document.getElementById("newArea").value.trim();
-      if(val && !areas.includes(val)) {
-        areas.push(val); shopsByArea[val]=[];
-        autoSave();
+      if(val && !planData.areas.includes(val)) {
+        planData.areas.push(val); planData.shopsByArea[val]=[];
         renderAreas(); renderShops(); renderShopAreaSelect();
       }
     }
     function delArea(i) {
-      let area = areas[i];
-      areas.splice(i,1);
-      delete shopsByArea[area];
-      autoSave();
+      let area = planData.areas[i];
+      planData.areas.splice(i,1);
+      delete planData.shopsByArea[area];
       renderAreas(); renderShops(); renderShopAreaSelect();
     }
+
+    // إدارة المحلات
     function renderShopAreaSelect() {
       let sel = document.getElementById("shopArea");
       sel.innerHTML = "";
-      areas.forEach(area => {
+      (planData.areas||[]).forEach(area => {
         let opt = document.createElement("option");
         opt.value = area; opt.textContent = area;
         sel.appendChild(opt);
@@ -275,9 +341,9 @@
     }
     function renderShops() {
       let html = "";
-      areas.forEach(area => {
+      (planData.areas||[]).forEach(area => {
         html += `<strong>${area}:</strong> `;
-        (shopsByArea[area]||[]).forEach((shop,i) => {
+        (planData.shopsByArea[area]||[]).forEach((shop,i) => {
           html += `<span class="list-item">${shop} <button class="del-btn" onclick="delShop('${area}',${i})">×</button></span>`;
         });
         html += "<br>";
@@ -287,32 +353,30 @@
     function addShop() {
       let area = document.getElementById("shopArea").value;
       let shop = document.getElementById("newShop").value.trim();
-      if(area && shop && !shopsByArea[area].includes(shop)) {
-        shopsByArea[area].push(shop);
-        autoSave();
+      if(area && shop && !planData.shopsByArea[area].includes(shop)) {
+        planData.shopsByArea[area].push(shop);
         renderShops();
         document.getElementById("newShop").value = "";
-        distribution.forEach((row,i)=>{
-          if(row.area === area) row.shops = [...shopsByArea[area]];
+        planData.distribution.forEach((row,i)=>{
+          if(row.area === area) row.shops = [...planData.shopsByArea[area]];
         });
-        autoSave();
         renderDistribution();
         renderPlanTable();
         renderStats();
       }
     }
     function delShop(area,i) {
-      shopsByArea[area].splice(i,1); 
-      autoSave();
+      planData.shopsByArea[area].splice(i,1);
       renderShops();
-      distribution.forEach((row)=>{
-        if(row.area === area) row.shops = row.shops.filter(shop => shopsByArea[area].includes(shop));
+      planData.distribution.forEach((row)=>{
+        if(row.area === area) row.shops = row.shops.filter(shop => planData.shopsByArea[area].includes(shop));
       });
-      autoSave();
       renderDistribution();
       renderPlanTable();
       renderStats();
     }
+
+    // إدارة جدول التوزيع
     function renderDistribution() {
       let userType = document.getElementById("userType").value;
       let html = `<table><tr>
@@ -323,29 +387,29 @@
         <th>المحلات</th>
         <th>حذف</th>
       </tr>`;
-      distribution.forEach((row,i) => {
+      (planData.distribution||[]).forEach((row,i) => {
         html += `<tr>
-          <td>${
+          <td>$$
             (userType === "developer" && isDevAuthorized)
-              ? `<select onchange="updateDist(${i},'inspector',this.value)">
-                  ${inspectors.map(ins => `<option${row.inspector===ins?" selected":""}>${ins}</option>`).join("")}
+              ? \\`<select onchange="updateDist(${i},'inspector',this.value)">
+                  $$(planData.inspectors||[]).map(ins => `\<option${row.inspector===ins?" selected":""}>${ins}</option>`).join("")
                 </select>`
               : row.inspector
-          }</td>
+          </td>
           <td><input type="date" value="${row.day}" onchange="updateDist(${i},'day',this.value)"></td>
-          <td>${
+          <td>$$
             (userType === "developer" && isDevAuthorized)
-              ? `<select onchange="updateDist(${i},'shift',this.value)">
+              ? \\`<select onchange="updateDist(${i},'shift',this.value)">
                   <option${row.shift==="صباحية"?" selected":""}>صباحية</option>
                   <option${row.shift==="مسائية"?" selected":""}>مسائية</option>
                 </select>`
               : (row.shift || "")
-          }</td>
-          <td><select onchange="updateDist(${i},'area',this.value)">${areas.map(ar => `<option${row.area===ar?" selected":""}>${ar}</option>`).join("")}</select></td>
+          </td>
+          <td><select onchange="updateDist(${i},'area',this.value)">${(planData.areas||[]).map(ar => `<option${row.area===ar?" selected":""}>${ar}</option>`).join("")}</select></td>
           <td><button class="shops-cell-btn" onclick="showShopListPopup(${i})">عرض المحلات</button>
-              ${
+              $$
                 (userType === "developer" && isDevAuthorized)
-                  ? `<button class="shops-cell-btn" style="background:#bed3fa;" onclick="openShopsPopup(${i})">تعديل المحلات</button>`
+                  ? \\`<button class="shops-cell-btn" style="background:#bed3fa;" onclick="openShopsPopup(${i})">تعديل المحلات</button>`
                   : ""
               }
           </td>
@@ -356,35 +420,34 @@
       document.getElementById("distribution").innerHTML = html;
     }
     function addDistRow() {
-      distribution.push({inspector:inspectors[0]||"", day:"", shift:"صباحية", area:areas[0]||"", shops:[...(shopsByArea[areas[0]]||[])]});
-      autoSave();
+      planData.distribution.push({inspector:planData.inspectors[0]||"", day:"", shift:"صباحية", area:planData.areas[0]||"", shops:[...(planData.shopsByArea[planData.areas[0]]||[])]});
       renderDistribution();
       renderPlanTable();
       renderStats();
     }
     function updateDist(i, field, value) {
-      distribution[i][field]=value;
+      planData.distribution[i][field]=value;
       if(field==="area") {
-        distribution[i].shops = [...(shopsByArea[value]||[])];
+        planData.distribution[i].shops = [...(planData.shopsByArea[value]||[])];
       }
-      autoSave();
       renderDistribution();
       renderPlanTable();
       renderStats();
     }
     function delDistRow(i) {
-      distribution.splice(i,1);
-      autoSave();
+      planData.distribution.splice(i,1);
       renderDistribution();
       renderPlanTable();
       renderStats();
     }
+
+    // إدارة المحلات في صف التوزيع
     function openShopsPopup(distIndex) {
       let userType = document.getElementById("userType").value;
       let isReadonly = (userType !== "developer" || !isDevAuthorized);
-      let dist = distribution[distIndex];
+      let dist = planData.distribution[distIndex];
       let area = dist.area;
-      let shops = shopsByArea[area] || [];
+      let shops = planData.shopsByArea[area] || [];
       let selectedShops = dist.shops || [];
       let popup = document.getElementById("shopsPopup");
       let html = `<div class="shops-popup-bg" onclick="closeShopsPopup(event)">
@@ -401,9 +464,9 @@
       if(!isReadonly)
         html += `<button type="button" class="shops-popup-btn" onclick="saveShopsPopup(${distIndex})">حفظ</button>`;
       html += `<button type="button" class="shops-popup-btn" onclick="closeShopsPopup()">إغلاق</button>
-        </form>
-        </div>
-      </div>`;
+          </form>
+          </div>
+        </div>`;
       popup.innerHTML = html;
       popup.style.display = "block";
     }
@@ -413,9 +476,8 @@
     }
     function saveShopsPopup(distIndex) {
       let form = document.getElementById("shopsForm");
-      let checkedShops = Array.from(form.querySelectorAll('input[type="checkbox"]:checked')).map(chk => chk.value);
-      distribution[distIndex].shops = checkedShops;
-      autoSave();
+      let checkedShops = Array.from(form.querySelectorAll('input[type="checkbox":checked]')).map(chk => chk.value);
+      planData.distribution[distIndex].shops = checkedShops;
       document.getElementById("shopsPopup").style.display = "none";
       renderDistribution();
       renderPlanTable();
@@ -426,7 +488,7 @@
       if(popup.style.display==="block" && e.target === popup) popup.style.display = "none";
     }
     function showShopListPopup(distIndex) {
-      let dist = distribution[distIndex];
+      let dist = planData.distribution[distIndex];
       let shops = dist.shops || [];
       let bg = document.getElementById("shopListPopupBg");
       let popup = document.getElementById("shopListPopup");
@@ -446,22 +508,20 @@
       document.getElementById("shopListPopupBg").style.display = "none";
     }
 
-    // جدول الاحصائيات: اسم المفتش صفوف، عدد المحلات، عدد الصباحية، عدد المسائية، وعدد العطلة (جمعة/سبت/أحد)
+    // جدول الاحصائيات
     function renderStats() {
       let inspectorShopCounts = {};
       let morningCounts = {};
       let eveningCounts = {};
       let weekendCounts = {};
-
-      inspectors.forEach(inspector => {
+      (planData.inspectors||[]).forEach(inspector => {
         inspectorShopCounts[inspector] = 0;
         morningCounts[inspector] = 0;
         eveningCounts[inspector] = 0;
         weekendCounts[inspector] = 0;
       });
-
-      distribution.forEach(row => {
-        if (!row.inspector || !inspectors.includes(row.inspector)) return;
+      (planData.distribution||[]).forEach(row => {
+        if (!row.inspector || !planData.inspectors.includes(row.inspector)) return;
         let shopsCount = row.shops ? row.shops.length : 0;
         let shift = row.shift || "";
         let inspector = row.inspector;
@@ -477,7 +537,6 @@
         if (shift === "مسائية") eveningCounts[inspector] += shopsCount;
         if (isWeekend) weekendCounts[inspector] += shopsCount;
       });
-
       let html = `<table class="stats-table">
         <thead>
           <tr>
@@ -489,7 +548,7 @@
           </tr>
         </thead>
         <tbody>`;
-      inspectors.forEach(name => {
+      (planData.inspectors||[]).forEach(name => {
         html += `<tr>
           <td class="stats-inspector-col">${name}</td>
           <td>${inspectorShopCounts[name]}</td>
@@ -512,8 +571,8 @@
       document.getElementById("stats").innerHTML = html;
     }
 
+    // جدول الخطة (لجميع المستخدمين)
     function renderPlanTable() {
-      let userType = document.getElementById("userType").value;
       let html = `<table>
         <thead>
           <tr>
@@ -526,25 +585,14 @@
         </thead>
         <tbody>
       `;
-      distribution.forEach((row, idx) => {
+      (planData.distribution||[]).forEach((row, idx) => {
         html += `<tr>
-          <td>${
-            (userType === "developer" && isDevAuthorized)
-              ? `<select onchange="updateDist(${idx},'inspector',this.value)">
-                  ${inspectors.map(ins => `<option${row.inspector===ins?" selected":""}>${ins}</option>`).join("")}
-                </select>`
-              : row.inspector
-          }</td>
+          <td>${row.inspector}</td>
           <td>${row.day}</td>
           <td>${row.shift || ""}</td>
           <td>${row.area}</td>
           <td>
             <button class="shops-cell-btn" onclick="showShopListPopup(${idx})">عرض المحلات</button>
-            ${
-              (userType === "developer" && isDevAuthorized)
-                ? `<button class="shops-cell-btn" style="background:#bed3fa;" onclick="openShopsPopup(${idx})">تعديل المحلات</button>`
-                : ""
-            }
           </td>
         </tr>`;
       });
@@ -553,40 +601,80 @@
           <tr>
             <td class="goals-cell" colspan="5">
               <span class="goals-red">أهداف التفتيش هذا الشهر:</span><br>
-              <span>${goals.replace(/\n/g, "<br>")}</span>
+              <span>${(planData.goals||"" ).replace(/\n/g, "<br>")}</span>
             </td>
           </tr>
         </tfoot>
       </table>`;
       document.getElementById("planTable").innerHTML = html;
     }
+
+    // حفظ الأهداف
     function saveGoals() {
       let newGoals = document.getElementById("goalsEdit").value.trim();
       if (newGoals) {
-        goals = newGoals;
-        autoSave();
+        planData.goals = newGoals;
         renderPlanTable();
         renderStats();
-        alert("تم حفظ أهداف التفتيش بنجاح!");
+        alert("تم حفظ أهداف التفتيش محليًا. اضغط حفظ الخطة لحفظها نهائيًا على GitHub.");
       }
     }
-    function savePlan() {
-      let plan = {
-        inspectors, areas, shopsByArea, distribution, goals
-      };
+
+    // حفظ الخطة على GitHub (للمطور فقط)
+    async function savePlan() {
+      if(!isDevAuthorized) return alert("صلاحية مطور مطلوبة");
+      let token = getTokenOrAsk();
+      if(!token) return alert("يجب إدخال التوكن أولاً");
+      // جلب sha الحالي للملف
+      let apiUrl = `https://api.github.com/repos/${PLAN_REPO}/contents/${PLAN_FILE}`;
+      let resp = await fetch(apiUrl, {headers:{Authorization: "token "+token}});
+      if(!resp.ok) return alert("فشل جلب بيانات الملف من GitHub (تحقق من التوكن)");
+      let fileJson = await resp.json();
+      let sha = fileJson.sha;
+      // رفع التحديث
+      let planContent = JSON.stringify(planData, null, 2);
+      let updateResp = await fetch(apiUrl, {
+        method:"PUT",
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization":"token "+token
+        },
+        body: JSON.stringify({
+          message: "تحديث خطة التفتيش من الواجهة التفاعلية",
+          content: btoa(unescape(encodeURIComponent(planContent))),
+          sha: sha,
+          branch: PLAN_BRANCH
+        })
+      });
+      if(updateResp.ok) {
+        alert("تم حفظ الخطة على GitHub بنجاح!");
+        reloadPlan(true);
+      } else {
+        let e = await updateResp.json();
+        alert("فشل حفظ الخطة:\n"+(e.message||""));
+      }
+    }
+    // حفظ الخطة على الجهاز (للمطور)
+    function savePlanLocally() {
+      let plan = planData;
       let blob = new Blob([JSON.stringify(plan, null, 2)], {type:"application/json"});
       let url = URL.createObjectURL(blob);
       let a = document.createElement("a");
       a.href = url;
-      a.download = "plan-data.html";
+      a.download = "plan-data.json";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      alert("تم حفظ الخطة على الجهاز!");
+      alert("تم حفظ الخطة على جهازك!");
     }
-    renderPlanTable();
-    renderStats();
+
+    // نسخة احتياطية تلقائية (للمطور)
+    setInterval(()=>{
+      if(isDevAuthorized && planData)
+        localStorage.setItem("planDataBackup", JSON.stringify(planData));
+    }, 10000);
+
   </script>
 </body>
 </html>
