@@ -1,7 +1,17 @@
 {
-  "inspectors": [],
+  "inspectors": [
+    "علي عبدالعال"
+  ],
   "areas": [],
   "shopsByArea": {},
-  "distribution": [],
+  "distribution": [
+    {
+      "inspector": "",
+      "day": "2025-09-26",
+      "shift": "صباحية",
+      "area": "",
+      "shops": []
+    }
+  ],
   "goals": ""
 }
