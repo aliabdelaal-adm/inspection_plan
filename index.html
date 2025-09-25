@@ -99,8 +99,6 @@
         <button onclick="addShop()">إضافة محل</button>
       </div>
       <hr>
-      <strong>إدارة خطة التفتيش:</strong>
-      <div id="distribution"></div>
       <button class="save-btn" onclick="savePlan()">حفظ الخطة على الجهاز</button>
       <hr>
       <strong class="goals-edit-label">أهداف التفتيش هذا الشهر:</strong>
@@ -118,7 +116,6 @@
     <div class="copyright">
       جميع الحقوق محفوظة &copy; المطور د. علي عبدالعال
     </div>
-    <div id="shopsPopup" style="display:none;"></div>
     <div id="shopListPopupBg" class="shop-list-popup-bg" style="display:none;">
       <div id="shopListPopup" class="shop-list-popup"></div>
     </div>
@@ -182,7 +179,6 @@
         renderAreas();
         renderShops();
         renderShopAreaSelect();
-        renderDistribution();
         document.getElementById("goalsEdit").value = goals;
       }
     }
@@ -196,7 +192,6 @@
         renderAreas();
         renderShops();
         renderShopAreaSelect();
-        renderDistribution();
         renderPlanTable();
         renderStats();
         document.getElementById("goalsEdit").value = goals;
@@ -228,7 +223,6 @@
         autoSave();
         renderInspectors();
         document.getElementById("newInspector").value = "";
-        renderDistribution();
         renderPlanTable();
         renderStats();
       }
@@ -237,7 +231,6 @@
       inspectors.splice(i,1);
       autoSave();
       renderInspectors();
-      renderDistribution();
       renderPlanTable();
       renderStats();
     }
@@ -296,7 +289,6 @@
           if(row.area === area) row.shops = [...shopsByArea[area]];
         });
         autoSave();
-        renderDistribution();
         renderPlanTable();
         renderStats();
       }
@@ -309,121 +301,8 @@
         if(row.area === area) row.shops = row.shops.filter(shop => shopsByArea[area].includes(shop));
       });
       autoSave();
-      renderDistribution();
       renderPlanTable();
       renderStats();
-    }
-    function renderDistribution() {
-      let userType = document.getElementById("userType").value;
-      let html = `<table><tr>
-        <th>مفتش</th>
-        <th>اليوم</th>
-        <th>وقت المناوبة</th>
-        <th>المنطقة</th>
-        <th>المحلات</th>
-        <th>حذف</th>
-      </tr>`;
-      distribution.forEach((row,i) => {
-        html += `<tr>
-          <td>${
-            (userType === "developer" && isDevAuthorized)
-              ? `<select onchange="updateDist(${i},'inspector',this.value)">
-                  ${inspectors.map(ins => `<option${row.inspector===ins?" selected":""}>${ins}</option>`).join("")}
-                </select>`
-              : row.inspector
-          }</td>
-          <td><input type="date" value="${row.day}" onchange="updateDist(${i},'day',this.value)"></td>
-          <td>${
-            (userType === "developer" && isDevAuthorized)
-              ? `<select onchange="updateDist(${i},'shift',this.value)">
-                  <option${row.shift==="صباحية"?" selected":""}>صباحية</option>
-                  <option${row.shift==="مسائية"?" selected":""}>مسائية</option>
-                </select>`
-              : (row.shift || "")
-          }</td>
-          <td><select onchange="updateDist(${i},'area',this.value)">${areas.map(ar => `<option${row.area===ar?" selected":""}>${ar}</option>`).join("")}</select></td>
-          <td><button class="shops-cell-btn" onclick="showShopListPopup(${i})">عرض المحلات</button>
-              ${
-                (userType === "developer" && isDevAuthorized)
-                  ? `<button class="shops-cell-btn" style="background:#bed3fa;" onclick="openShopsPopup(${i})">تعديل المحلات</button>`
-                  : ""
-              }
-          </td>
-          <td><button class="del-btn" onclick="delDistRow(${i})">×</button></td>
-        </tr>`;
-      });
-      html += `</table><button onclick="addDistRow()">إضافة صف</button>`;
-      document.getElementById("distribution").innerHTML = html;
-    }
-    function addDistRow() {
-      distribution.push({inspector:inspectors[0]||"", day:"", shift:"صباحية", area:areas[0]||"", shops:[...(shopsByArea[areas[0]]||[])]});
-      autoSave();
-      renderDistribution();
-      renderPlanTable();
-      renderStats();
-    }
-    function updateDist(i, field, value) {
-      distribution[i][field]=value;
-      if(field==="area") {
-        distribution[i].shops = [...(shopsByArea[value]||[])];
-      }
-      autoSave();
-      renderDistribution();
-      renderPlanTable();
-      renderStats();
-    }
-    function delDistRow(i) {
-      distribution.splice(i,1);
-      autoSave();
-      renderDistribution();
-      renderPlanTable();
-      renderStats();
-    }
-    function openShopsPopup(distIndex) {
-      let userType = document.getElementById("userType").value;
-      let isReadonly = (userType !== "developer" || !isDevAuthorized);
-      let dist = distribution[distIndex];
-      let area = dist.area;
-      let shops = shopsByArea[area] || [];
-      let selectedShops = dist.shops || [];
-      let popup = document.getElementById("shopsPopup");
-      let html = `<div class="shops-popup-bg" onclick="closeShopsPopup(event)">
-        <div class="shops-popup-box" onclick="event.stopPropagation()">
-          <strong>اختيار المحلات من منطقة (${area}):</strong><br><br>
-          <form id="shopsForm">`;
-      shops.forEach(shop => {
-        let checked = selectedShops.includes(shop) ? "checked" : "";
-        html += `<label style="display:block;margin-bottom:7px;">
-          <input type="checkbox" value="${shop}" ${checked} ${isReadonly ? "disabled" : ""}> ${shop}
-        </label>`;
-      });
-      html += `<br>`;
-      if(!isReadonly)
-        html += `<button type="button" class="shops-popup-btn" onclick="saveShopsPopup(${distIndex})">حفظ</button>`;
-      html += `<button type="button" class="shops-popup-btn" onclick="closeShopsPopup()">إغلاق</button>
-        </form>
-        </div>
-      </div>`;
-      popup.innerHTML = html;
-      popup.style.display = "block";
-    }
-    function closeShopsPopup(e) {
-      if(e && e.target !== document.getElementById("shopsPopup")) return;
-      document.getElementById("shopsPopup").style.display = "none";
-    }
-    function saveShopsPopup(distIndex) {
-      let form = document.getElementById("shopsForm");
-      let checkedShops = Array.from(form.querySelectorAll('input[type="checkbox"]:checked')).map(chk => chk.value);
-      distribution[distIndex].shops = checkedShops;
-      autoSave();
-      document.getElementById("shopsPopup").style.display = "none";
-      renderDistribution();
-      renderPlanTable();
-      renderStats();
-    }
-    window.onclick = function(e){
-      let popup = document.getElementById("shopsPopup");
-      if(popup.style.display==="block" && e.target === popup) popup.style.display = "none";
     }
     function showShopListPopup(distIndex) {
       let dist = distribution[distIndex];
@@ -528,23 +407,12 @@
       `;
       distribution.forEach((row, idx) => {
         html += `<tr>
-          <td>${
-            (userType === "developer" && isDevAuthorized)
-              ? `<select onchange="updateDist(${idx},'inspector',this.value)">
-                  ${inspectors.map(ins => `<option${row.inspector===ins?" selected":""}>${ins}</option>`).join("")}
-                </select>`
-              : row.inspector
-          }</td>
+          <td>${row.inspector}</td>
           <td>${row.day}</td>
           <td>${row.shift || ""}</td>
           <td>${row.area}</td>
           <td>
             <button class="shops-cell-btn" onclick="showShopListPopup(${idx})">عرض المحلات</button>
-            ${
-              (userType === "developer" && isDevAuthorized)
-                ? `<button class="shops-cell-btn" style="background:#bed3fa;" onclick="openShopsPopup(${idx})">تعديل المحلات</button>`
-                : ""
-            }
           </td>
         </tr>`;
       });
